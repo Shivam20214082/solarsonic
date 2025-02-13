@@ -1,18 +1,16 @@
 from fastapi import FastAPI
+from pymongo import MongoClient
 from pydantic import BaseModel
-import psycopg2
-import os
+import datetime
 
 app = FastAPI()
 
-# PostgreSQL Database URL from Render
-DATABASE_URL = "postgresql://sensor_user:3el9ud0KKAEkPPpeTbPFYbULSZbPiz0U@dpg-cumf5upu0jms73e0m42g-a.oregon-postgres.render.com/sensor_db_h5nk"
+# Connect to MongoDB Atlas
+client = MongoClient("mongodb+srv://shivam66jnp:XYPPYf4gyJf5El4O@cluster0.ru4bvi9.mongodb.net/esp8266_data?retryWrites=true&w=majority")
+db = client["esp8266_data"]
+collection = db["sensor_data"]
 
-# Connect to PostgreSQL
-conn = psycopg2.connect(DATABASE_URL)
-cursor = conn.cursor()
-
-# Define Data Model
+# Define Sensor Data Model
 class SensorData(BaseModel):
     temperature: float
     humidity: float
@@ -27,23 +25,14 @@ class SensorData(BaseModel):
     dust_density_pm25: float
     dust_density_pm10: float
 
-# API to Insert Data
-@app.post("/insert_data")
-def insert_data(data: SensorData):
-    query = """
-    INSERT INTO sensor_data (temperature, humidity, mq2_analog, mq2_digital, sound_analog, sound_digital, mq9_analog, mq9_digital, mq8_analog, mq8_digital, dust_density_pm25, dust_density_pm10) 
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    values = (
-        data.temperature, data.humidity, data.mq2_analog, data.mq2_digital,
-        data.sound_analog, data.sound_digital, data.mq9_analog, data.mq9_digital,
-        data.mq8_analog, data.mq8_digital, data.dust_density_pm25, data.dust_density_pm10
-    )
-    cursor.execute(query, values)
-    conn.commit()
+@app.post("/insert")
+async def insert_data(data: SensorData):
+    record = data.dict()
+    record["timestamp"] = datetime.datetime.utcnow()
+    collection.insert_one(record)
     return {"message": "Data inserted successfully"}
 
-# Run FastAPI locally
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.get("/data")
+async def get_data():
+    records = list(collection.find({}, {"_id": 0}))
+    return {"data": records}
