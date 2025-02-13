@@ -36,3 +36,7 @@ async def insert_data(data: SensorData):
 async def get_data():
     records = list(collection.find({}, {"_id": 0}))
     return {"data": records}
+
+@app.get("/")
+def home():
+    return {"message": "FastAPI is running!"}
